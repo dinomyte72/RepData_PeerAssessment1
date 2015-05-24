@@ -1,0 +1,136 @@
+Exploration of NOAA Storm Data
+==============================
+Author: Dino Chioda
+
+Date: May 23, 2015
+
+
+## Synopsis
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+The Storm Events Database of the National Oceanic and Atmospheric Administration (NOAA) tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. The events in the database start in the year 1950 and end in November 2011 - the data is more complete in more recent years as the quality of the records improved.  
+
+This report will delve into this data and answer some basic questions about severe weather events with the ultimate goal of providing guidelines to prioritize resources for different types of events.
+
+
+## Data Processing
+
+###Downloading the data
+The data for this report was downloaded from the [National Oceanic and Atmospheric Administration](http://www.nws.noaa.gov) storm database. The data can be downloaded by clicking [here](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2). It is a zipped CSV file and will need to be unzipped to be loaded into a dataset.
+```{r}
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+
+# Download the file (if needed)
+if (!file.exists("/Users/Dino/Documents/git/repro_research/PA2/storm.csv.bz2")) {
+    download.file(url, "/Users/Dino/Documents/git/repro_research/PA2/storm.csv.bz2", method="curl")
+}
+# Unzip the file (if needed)
+if (!file.exists("/Users/Dino/Documents/git/repro_research/PA2/storm.csv")) {
+    library(R.utils)
+    bunzip2("/Users/Dino/Documents/git/repro_research/PA2/storm.csv.bz2", "/Users/Dino/Documents/git/repro_research/PA2/storm.csv", remove = FALSE)
+}
+```
+
+
+### Loading and prepping the data
+The following actions will be taken to make the data more readable and usable:
+
+1. Assign some column names to make the data more usable.
+
+2. Clean up the exponential data in CROPDMGEXP and PROPDMGEXP and use it to calculate the correct amount of crop and property damage.
+
+```{r}
+# Load data into R
+storm_raw <- read.csv("/Users/Dino/Documents/git/repro_research/PA2/storm.csv")
+storm <- storm_raw[c("EVTYPE", "FATALITIES","INJURIES", "PROPDMG", "PROPDMGEXP","CROPDMG", "CROPDMGEXP")]
+
+#Find unique crop damage exponential values
+unique(storm$CROPDMGEXP)
+
+# Clean crop exponential data
+storm$CROPEXP[storm$CROPDMGEXP == "M"] <- 1000000
+storm$CROPEXP[storm$CROPDMGEXP == "K"] <- 1000
+storm$CROPEXP[storm$CROPDMGEXP == "m"] <- 1000000
+storm$CROPEXP[storm$CROPDMGEXP == "B"] <- 1000000000
+storm$CROPEXP[storm$CROPDMGEXP == "0"] <- 1
+storm$CROPEXP[storm$CROPDMGEXP == "k"] <- 1000
+storm$CROPEXP[storm$CROPDMGEXP == "2"] <- 100
+storm$CROPEXP[storm$CROPDMGEXP == ""] <- 1
+storm$CROPEXP[storm$CROPDMGEXP == "?"] <- 0
+
+#Find unique property damage exponential values
+unique(storm$PROPDMGEXP)
+
+# Clean property exponential data
+storm$PROPEXP[storm$PROPDMGEXP == "K"] <- 1000
+storm$PROPEXP[storm$PROPDMGEXP == "M"] <- 1000000
+storm$PROPEXP[storm$PROPDMGEXP == ""] <- 1
+storm$PROPEXP[storm$PROPDMGEXP == "B"] <- 10000000000
+storm$PROPEXP[storm$PROPDMGEXP == "m"] <- 1000000
+storm$PROPEXP[storm$PROPDMGEXP == "0"] <- 1
+storm$PROPEXP[storm$PROPDMGEXP == "5"] <- 100000
+storm$PROPEXP[storm$PROPDMGEXP == "6"] <- 1000000
+storm$PROPEXP[storm$PROPDMGEXP == "4"] <- 10000
+storm$PROPEXP[storm$PROPDMGEXP == "2"] <- 100
+storm$PROPEXP[storm$PROPDMGEXP == "3"] <- 1000
+storm$PROPEXP[storm$PROPDMGEXP == "h"] <- 100
+storm$PROPEXP[storm$PROPDMGEXP == "7"] <- 10000000
+storm$PROPEXP[storm$PROPDMGEXP == "H"] <- 100
+storm$PROPEXP[storm$PROPDMGEXP == "1"] <- 10
+storm$PROPEXP[storm$PROPDMGEXP == "8"] <- 100000000
+storm$PROPEXP[storm$PROPDMGEXP == "+"] <- 0
+storm$PROPEXP[storm$PROPDMGEXP == "-"] <- 0
+storm$PROPEXP[storm$PROPDMGEXP == "?"] <- 0
+
+# Calculate correct dollar values for property and crop damage
+storm$CROPDMG <- storm$CROPDMG * storm$CROPEXP / 1000000000
+storm$PROPDMG <- storm$PROPDMG * storm$PROPEXP / 1000000000
+storm <- storm[,c("EVTYPE","FATALITIES","INJURIES","PROPDMG", "CROPDMG")]
+```
+
+
+## Results
+
+### Assessing effects of Meteorological Events on Population Health
+We can consider the term harmful as meaning that there occurred either a **fatality** or an **injury** to a person. Therefore, let us create two subsets of data from these perspectives:
+```{r}
+fatalities <- aggregate(FATALITIES ~ EVTYPE, storm, sum)
+fatalities <- fatalities[order(-fatalities$FATALITIES),][1:10,]
+head(fatalities)
+injuries <- aggregate(INJURIES ~ EVTYPE, storm, sum)
+injuries <- injuries[order(-injuries$INJURIES),][1:10,]
+head(injuries)
+```
+
+Let's now plot these two datasets:
+```{r}
+par(mfrow = c(1, 2))
+barplot(fatalities$FATALITIES, names.arg = fatalities$EVTYPE, main= "Most Fatal Events", ylab = "No. of Fatalities", las = 2, cex.names = 0.6, cex.axis = 0.6)
+barplot(injuries$INJURIES, names.arg = injuries$EVTYPE, main= "Most Injurious Events", ylab = "No. of Injuries", las = 2, cex.names = 0.6, cex.axis = 0.6)
+```
+
+The event type that inflicts the most fatalities to the population is **`r fatalities$EVTYPE[1]`**.
+The event type that inflicts the most injuries to the population is **`r injuries$EVTYPE[1]`**.
+
+
+### Assessing effects of Meteorological Events on Property and Crop Values
+Let us use the same approach as we used for population health and subset the data into **crop damage** and **property damage**.
+```{r}
+crop_dmg <- aggregate(CROPDMG ~ EVTYPE, storm, sum)
+crop_dmg <- crop_dmg[order(-crop_dmg$CROPDMG),][1:10,]
+head(crop_dmg)
+prop_dmg <- aggregate(PROPDMG ~ EVTYPE, storm, sum)
+prop_dmg <- prop_dmg[order(-prop_dmg$PROPDMG),][1:10,]
+head(prop_dmg)
+```
+
+Let's now plot these datasets in a barplot:
+```{r}
+par(mfrow = c(1, 2))
+barplot(crop_dmg$CROPDMG, names.arg = crop_dmg$EVTYPE, main= "Top 10 Crop Damaging Events", ylab = " $ Billions", las = 2, cex.names = 0.6, cex.axis = 0.6)
+barplot(prop_dmg$PROPDMG, names.arg = prop_dmg$EVTYPE, main= "Top 10 Property Damaging Events", ylab = "$ Billions", las = 2, cex.names = 0.6, cex.axis = 0.6)
+```
+
+The event type that inflicts the most crop damage to is **`r crop_dmg$EVTYPE[1]`**.
+The event type that inflicts the most property damage is **`r prop_dmg$EVTYPE[1]`**.
